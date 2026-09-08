@@ -72,10 +72,22 @@ AI_ACCELERATOR_PATTERNS = [
 ]
 
 # 위 패턴에 걸려도 이 용어가 함께 있으면 우리 분야로 보고 살린다.
+# 여기에 "가속기"를 넣으면 안 된다. "AI가속기"가 스스로를 구제해 버린다.
 DOMAIN_TERMS = [
     "핵융합", "빔라인", "방사광", "중이온", "사이클로트론", "토카막",
     "선형가속기", "입자가속기", "도파관", "캐비티", "클라이스트론",
-    "초전도", "플라즈마", "KSTAR", "ITER",
+    "초전도", "KSTAR", "ITER",
+    "fusion", "tokamak", "beamline", "synchrotron", "cyclotron",
+    "waveguide", "klystron", "linac", "undulator", "cryomodule",
+]
+
+# "플라즈마"와 "RF"는 단독으로는 우리 분야를 뜻하지 않는다. ICP 광학방출분광기,
+# SDR 무선 송수신기처럼 무관한 장비가 잔뜩 걸린다. 이 키워드로만 잡힌 공고는
+# 아래 문맥 용어가 함께 있을 때만 남긴다.
+WEAK_KEYWORDS = {"플라즈마", "RF"}
+
+CONTEXT_TERMS = DOMAIN_TERMS + [
+    "가속기", "이온빔", "accelerator", "ion beam",
 ]
 
 TIMEOUT = 30
@@ -144,6 +156,18 @@ def is_ai_accelerator(title: str) -> bool:
     return not any(term.lower() in title.lower() for term in DOMAIN_TERMS)
 
 
+def is_weak_only(item: dict) -> bool:
+    """약한 키워드로만 걸렸고 문맥 용어도 없으면 True(= 버릴 공고).
+
+    키워드를 전부 모은 뒤에 판단해야 한다. "플라즈마"로 먼저 걸린 공고가
+    나중에 "핵융합"으로도 걸릴 수 있기 때문이다.
+    """
+    if not set(item["_매칭키워드"]) <= WEAK_KEYWORDS:
+        return False
+    title = (item.get("bidNtceNm") or "").lower()
+    return not any(term.lower() in title for term in CONTEXT_TERMS)
+
+
 def collect(days: int, service_key: str) -> tuple[list[dict], list[str]]:
     now = datetime.now()
     begin = (now - timedelta(days=days)).strftime("%Y%m%d0000")
@@ -204,7 +228,8 @@ def collect(days: int, service_key: str) -> tuple[list[dict], list[str]]:
                 item["_매칭키워드"] = prev["_매칭키워드"]
                 by_no[key] = item
 
-    rows = sorted(by_no.values(), key=lambda i: i.get("bidNtceDt", ""), reverse=True)
+    kept = [i for i in by_no.values() if not is_weak_only(i)]
+    rows = sorted(kept, key=lambda i: i.get("bidNtceDt", ""), reverse=True)
     return rows, failures
 
 
