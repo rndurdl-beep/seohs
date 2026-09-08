@@ -20,6 +20,7 @@ import argparse
 import json
 import os
 import random
+import re
 import subprocess
 import sys
 import time
@@ -37,8 +38,10 @@ OPERATIONS = {
 }
 
 # bidNtceNm 은 부분일치 검색이므로 상위 개념 키워드를 넓게 던진다.
+# "입자가속기"는 "가속기"의 부분집합이라 결과가 겹치지만, 명시 요청이라 남겨둔다.
 KEYWORDS = [
     "가속기",
+    "입자가속기",
     "핵융합",
     "빔라인",
     "방사광",
@@ -47,9 +50,18 @@ KEYWORDS = [
     "토카막",
     "초전도",
     "플라즈마",
+    "도파관",
+    "캐비티",
+    "클라이스트론",
+    "RF",
     "KSTAR",
     "ITER",
 ]
+
+# bidNtceNm 은 부분일치라 "RF"가 RFID·RFP·P-XRF 같은 무관한 공고까지 끌어온다.
+# 약어를 하나씩 막는 블랙리스트는 끝이 없으므로, 라틴 문자 키워드는 앞뒤에 다른
+# 알파벳이 붙지 않은 단독 토큰일 때만 인정한다.
+BOUNDARY_KEYWORDS = {"RF", "ITER", "KSTAR"}
 
 TIMEOUT = 30
 RETRIES = 5
@@ -95,6 +107,18 @@ def fetch(op: str, keyword: str, begin: str, end: str, service_key: str) -> list
     return None
 
 
+def is_noise_match(keyword: str, title: str) -> bool:
+    """키워드가 더 긴 알파벳 낱말 안에만 들어 있으면 True(= 버릴 매칭).
+
+    "RFID 태그"나 "P-XRF 분석"은 'RF'로 검색되지만 우리 분야가 아니다.
+    "X-Band RF Waveguide"처럼 RF가 단독으로 선 것만 남긴다.
+    """
+    if keyword not in BOUNDARY_KEYWORDS:
+        return False
+    pattern = rf"(?<![A-Za-z]){re.escape(keyword)}(?![A-Za-z])"
+    return re.search(pattern, title, re.IGNORECASE) is None
+
+
 def collect(days: int, service_key: str) -> tuple[list[dict], list[str]]:
     now = datetime.now()
     begin = (now - timedelta(days=days)).strftime("%Y%m%d0000")
@@ -122,6 +146,8 @@ def collect(days: int, service_key: str) -> tuple[list[dict], list[str]]:
             failures.append(f"{label}/{keyword}")
             continue
         for item in items:
+            if is_noise_match(keyword, item.get("bidNtceNm") or ""):
+                continue
             # 같은 공고가 여러 키워드에 걸리므로 공고번호+차수로 중복 제거
             key = f"{item.get('bidNtceNo')}-{item.get('bidNtceOrd')}"
             if key not in by_no:

@@ -24,8 +24,11 @@ python3 scripts/fts_fetch.py --days 2
 
 - **키는 이미 퍼센트 인코딩된 문자열이다.** `--data-urlencode` 등으로 다시
   인코딩하면 `SERVICE_KEY_IS_NOT_REGISTERED_ERROR`가 난다. URL에 그대로 붙일 것.
-- 업무구분 4종(물품/용역/공사/외자) × 키워드 11개를 조회하고 공고번호+차수로
+- 업무구분 4종(물품/용역/공사/외자) × 키워드 16개를 조회하고 공고번호+차수로
   중복을 제거한다.
+- `RF`·`ITER`·`KSTAR`처럼 라틴 문자 키워드는 부분일치가 `RFID`·`P-XRF`·
+  `ITERATION`까지 물어오므로, 앞뒤에 알파벳이 붙지 않은 단독 토큰일 때만
+  인정한다(`BOUNDARY_KEYWORDS`).
 - `inqryDiv=1`은 공고게시일시 기준 조회를 뜻한다.
 - API가 간헐적으로 연결을 끊으므로 조합마다 4회까지 지수 백오프 재시도한다.
 

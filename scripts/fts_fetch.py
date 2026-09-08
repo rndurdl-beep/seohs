@@ -38,6 +38,8 @@ RETRIES = 4
 STRONG = [
     "tokamak", "stellarator", "synchrotron", "cyclotron", "synchrocyclotron",
     "beamline", "beam line", "cryomodule", "klystron", "undulator",
+    "waveguide", "rf cavity", "accelerating cavity", "superconducting cavity",
+    "cavity resonator", "resonant cavity",
     "nuclear fusion", "fusion energy", "fusion reactor", "fusion power",
     "tritium", "divertor", "breeder blanket", "neutral beam",
     "particle accelerator", "linear accelerator", "linac",
@@ -46,7 +48,10 @@ STRONG = [
 ]
 
 # 2등급: 단독으로는 애매해서 같은 문서에 CONTEXT 단어가 함께 있어야 인정한다.
-WEAK = ["fusion", "accelerator", "plasma", "superconducting", "cryogenic"]
+# "rf"는 단어 경계로 찾으므로 RFID·RFP 같은 약어에는 걸리지 않지만, 그것만으로
+# 우리 분야라 하기엔 약해서 2등급에 둔다.
+WEAK = ["fusion", "accelerator", "plasma", "superconducting", "cryogenic",
+        "rf", "radio frequency"]
 
 CONTEXT = [
     "nuclear", "energy", "physics", "research facility", "reactor",
