@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 import subprocess
 import sys
 import time
@@ -51,7 +52,8 @@ KEYWORDS = [
 ]
 
 TIMEOUT = 30
-RETRIES = 4
+RETRIES = 5
+WORKERS = 3
 
 
 def fetch(op: str, keyword: str, begin: str, end: str, service_key: str) -> list[dict] | None:
@@ -87,7 +89,8 @@ def fetch(op: str, keyword: str, begin: str, end: str, service_key: str) -> list
         else:
             last_err = (proc.stderr or proc.stdout or "").strip()[:200]
         if attempt < RETRIES - 1:
-            time.sleep(2 ** attempt)
+            # 지터를 섞어 재시도가 한꺼번에 몰리지 않게 한다.
+            time.sleep(2 ** attempt + random.uniform(0, 1))
     print(f"  [경고] {op}/{keyword} 조회 실패: {last_err}", file=sys.stderr)
     return None
 
@@ -99,10 +102,11 @@ def collect(days: int, service_key: str) -> tuple[list[dict], list[str]]:
 
     combos = [(label, op, kw) for label, op in OPERATIONS.items() for kw in KEYWORDS]
 
-    # 44개 조합을 순차로 돌면 몇 분씩 걸린다. API가 초당 호출을 제한하지 않으므로
-    # 소수의 스레드로 나눠 던지되, 서버를 때리지 않도록 동시성은 낮게 유지한다.
+    # 44개 조합을 순차로 돌면 몇 분씩 걸린다. 그렇다고 많이 붙이면 서버가
+    # 연결을 끊어(Recv failure) 재시도를 다 쓰고도 조합이 통째로 빈다.
+    # WORKERS=3 정도가 속도와 성공률의 접점이다.
     results: dict[tuple[str, str, str], list[dict] | None] = {}
-    with ThreadPoolExecutor(max_workers=6) as pool:
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
         futures = {
             pool.submit(fetch, op, kw, begin, end, service_key): (label, op, kw)
             for label, op, kw in combos
