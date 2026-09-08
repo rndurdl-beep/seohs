@@ -68,6 +68,9 @@ FALSE_POSITIVES = [
     "growth accelerator", "accelerator programme", "accelerator program",
     "accelerator cohort", "career accelerator", "concrete accelerator",
     "accelerator pedal", "digital accelerator", "innovation accelerator",
+    # GPU·NPU 계열 연산 가속기는 분야 밖(의료용 선형가속기는 linac 으로 잡힌다)
+    "ai accelerator", "gpu accelerator", "neural accelerator",
+    "hardware accelerator", "inference accelerator", "ml accelerator",
     "blood plasma", "plasma donation", "plasma freezer", "plasma screen",
     "plasma display", "plasma tv", "platelet", "plasma protein",
 ]

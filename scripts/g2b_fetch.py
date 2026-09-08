@@ -63,6 +63,21 @@ KEYWORDS = [
 # 알파벳이 붙지 않은 단독 토큰일 때만 인정한다.
 BOUNDARY_KEYWORDS = {"RF", "ITER", "KSTAR"}
 
+# "가속기"는 GPU·NPU 계열 연산 가속기도 물어온다. 우리 분야가 아니라 제외한다.
+# 의료용 선형가속기는 대상이므로 이 패턴에 걸리지 않는다.
+AI_ACCELERATOR_PATTERNS = [
+    r"AI\s*가속기", r"인공지능\s*가속기", r"GPU\s*가속기", r"NPU\s*가속기",
+    r"연산\s*가속기", r"신경망\s*가속기", r"딥러닝\s*가속기", r"추론\s*가속기",
+    r"가속기\s*카드", r"AI\s*반도체",
+]
+
+# 위 패턴에 걸려도 이 용어가 함께 있으면 우리 분야로 보고 살린다.
+DOMAIN_TERMS = [
+    "핵융합", "빔라인", "방사광", "중이온", "사이클로트론", "토카막",
+    "선형가속기", "입자가속기", "도파관", "캐비티", "클라이스트론",
+    "초전도", "플라즈마", "KSTAR", "ITER",
+]
+
 TIMEOUT = 30
 RETRIES = 5
 WORKERS = 3
@@ -119,6 +134,16 @@ def is_noise_match(keyword: str, title: str) -> bool:
     return re.search(pattern, title, re.IGNORECASE) is None
 
 
+def is_ai_accelerator(title: str) -> bool:
+    """GPU·NPU 계열 연산 가속기 공고면 True(= 분야 밖).
+
+    의료용 선형가속기처럼 분야 용어가 함께 있으면 살린다.
+    """
+    if not any(re.search(p, title, re.IGNORECASE) for p in AI_ACCELERATOR_PATTERNS):
+        return False
+    return not any(term.lower() in title.lower() for term in DOMAIN_TERMS)
+
+
 def collect(days: int, service_key: str) -> tuple[list[dict], list[str]]:
     now = datetime.now()
     begin = (now - timedelta(days=days)).strftime("%Y%m%d0000")
@@ -159,16 +184,25 @@ def collect(days: int, service_key: str) -> tuple[list[dict], list[str]]:
             failures.append(f"{label}/{keyword}")
             continue
         for item in items:
-            if is_noise_match(keyword, item.get("bidNtceNm") or ""):
+            title = item.get("bidNtceNm") or ""
+            if is_noise_match(keyword, title) or is_ai_accelerator(title):
                 continue
-            # 같은 공고가 여러 키워드에 걸리므로 공고번호+차수로 중복 제거
-            key = f"{item.get('bidNtceNo')}-{item.get('bidNtceOrd')}"
-            if key not in by_no:
+            # 같은 공고가 여러 키워드에 걸리므로 공고번호로 중복 제거한다.
+            # 재공고는 같은 공고번호에 차수(bidNtceOrd)만 올라가므로, 차수가
+            # 높은 쪽이 최신이다. 낮은 차수는 버리고 매칭 키워드만 넘겨받는다.
+            key = item.get("bidNtceNo")
+            prev = by_no.get(key)
+            if prev is None:
                 item["_업무구분"] = label
                 item["_매칭키워드"] = [keyword]
                 by_no[key] = item
-            elif keyword not in by_no[key]["_매칭키워드"]:
-                by_no[key]["_매칭키워드"].append(keyword)
+                continue
+            if keyword not in prev["_매칭키워드"]:
+                prev["_매칭키워드"].append(keyword)
+            if (item.get("bidNtceOrd") or "") > (prev.get("bidNtceOrd") or ""):
+                item["_업무구분"] = label
+                item["_매칭키워드"] = prev["_매칭키워드"]
+                by_no[key] = item
 
     rows = sorted(by_no.values(), key=lambda i: i.get("bidNtceDt", ""), reverse=True)
     return rows, failures
