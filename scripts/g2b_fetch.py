@@ -126,7 +126,7 @@ def collect(days: int, service_key: str) -> tuple[list[dict], list[str]]:
 
     combos = [(label, op, kw) for label, op in OPERATIONS.items() for kw in KEYWORDS]
 
-    # 44개 조합을 순차로 돌면 몇 분씩 걸린다. 그렇다고 많이 붙이면 서버가
+    # 조합을 순차로 돌면 몇 분씩 걸린다. 그렇다고 많이 붙이면 서버가
     # 연결을 끊어(Recv failure) 재시도를 다 쓰고도 조합이 통째로 빈다.
     # WORKERS=3 정도가 속도와 성공률의 접점이다.
     results: dict[tuple[str, str, str], list[dict] | None] = {}
@@ -137,6 +137,19 @@ def collect(days: int, service_key: str) -> tuple[list[dict], list[str]]:
         }
         for future in as_completed(futures):
             results[futures[future]] = future.result()
+
+    # 2차 패스: 1차에서 끝내 실패한 조합만 동시성 없이 하나씩 다시 던진다.
+    # 실패는 대개 서버가 연결을 끊어서 생기므로, 혼자 천천히 가면 대부분 통과한다.
+    # 여기서도 실패한 것만 진짜 실패로 보고한다.
+    retry_targets = [c for c in combos if results.get(c) is None]
+    if retry_targets:
+        print(f"  [2차 패스] 실패한 {len(retry_targets)}개 조합 재조회", file=sys.stderr)
+        for label, op, kw in retry_targets:
+            time.sleep(1)
+            again = fetch(op, kw, begin, end, service_key)
+            if again is not None:
+                results[(label, op, kw)] = again
+                print(f"  [2차 패스] {op}/{kw} 복구", file=sys.stderr)
 
     by_no: dict[str, dict] = {}
     failures: list[str] = []
